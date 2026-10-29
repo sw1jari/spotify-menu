@@ -53,6 +53,17 @@ class LiveTest(unittest.TestCase):
             spotify.set_liked(uri, was_liked)
         self.assertEqual(spotify.is_liked(uri), was_liked)
 
+    def test_add_to_playlist(self):
+        # use a throwaway playlist, so none of your own playlists change
+        uri = spotify.search(QUERY)["tracks"][0]["uri"]
+        playlist = spotify.api("POST", "/me/playlists",
+                               body={"name": "spotify-menu test", "public": False})
+        try:
+            spotify.add_to_playlist(playlist["id"], uri)
+            self.assertEqual([track["uri"] for track in spotify.playlist_tracks(playlist["id"])], [uri])
+        finally:
+            spotify.api("DELETE", f"/playlists/{playlist['id']}/followers")
+
     def test_library(self):
         playlists = spotify.my_playlists()
         self.assertTrue(all("uri" in playlist for playlist in playlists))

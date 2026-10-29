@@ -32,19 +32,20 @@ def controls():
     """(label, action) pairs for playback, with shuffle and repeat showing their current state."""
     shuffle = "on" if player.playerctl("shuffle") == "On" else "off"
     repeat = player.repeat_mode()
-    options = [("⏯ Pause/resume", player.toggle_pause)]
-    # episodes and ads can't be liked, so only offer it for tracks
-    uri = player.current_track_uri()
-    if uri:
-        liked = spotify.is_liked(uri)
-        options.append(("♥ Unlike" if liked else "♡ Like", lambda: set_liked(uri, not liked)))
-    return options + [
+    options = [
+        ("⏯ Pause/resume", player.toggle_pause),
         ("⏭ Next", player.next_track),
         ("⏮ Previous", player.previous_track),
         (f"🔀 Shuffle: {shuffle}", player.toggle_shuffle),
         (f"{'🔂' if repeat == 'one' else '🔁'} Repeat: {repeat}", player.cycle_repeat),
-        ("⏹ Quit Spotify", player.quit),
     ]
+    # episodes and ads can't be liked or added, so only offer these for tracks
+    uri = player.current_track_uri()
+    if uri:
+        liked = spotify.is_liked(uri)
+        options.append(("♥ Unlike" if liked else "♡ Like", lambda: set_liked(uri, not liked)))
+        options.append(("➕ Add to playlist", lambda: add_to_playlist_menu(uri)))
+    return options + [("⏹ Quit Spotify", player.quit)]
 
 
 def set_liked(uri, liked):
@@ -53,6 +54,27 @@ def set_liked(uri, liked):
     # the menu closes right after, so confirm it in a notification
     notify(f"{'Liked' if liked else 'Unliked'} {title}")
     # liked songs and search's ♥ marks read the cache, so bring it up to date
+    cache.refresh_in_background(force=True)
+
+
+def add_to_playlist_menu(uri):
+    """Pick one of your own or collaborative playlists and add the track to it."""
+    title = player.now_playing()
+    my_id = cache.user_id()
+    # Spotify only lets you add to playlists you own or collaborate on
+    playlists = [playlist for playlist in cache.playlists()
+                 if playlist["owner"]["id"] == my_id or playlist.get("collaborative")]
+    playlist = pick([(playlist["name"], playlist) for playlist in playlists], "add to:")
+    if not isinstance(playlist, dict):
+        return
+
+    tracks = cache.playlist_tracks(playlist) or []
+    if any(track["uri"] == uri for track in tracks):
+        notify(f"{title} is already in {playlist['name']}")
+        return
+    spotify.add_to_playlist(playlist["id"], uri)
+    notify(f"Added {title} to {playlist['name']}")
+    # the playlist's snapshot changed, so fetch the new one for the cache
     cache.refresh_in_background(force=True)
 
 

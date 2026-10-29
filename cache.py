@@ -46,9 +46,12 @@ def liked_tracks():
     return cached("liked", spotify.liked_tracks)
 
 
+def user_id():
+    return cached("user_id", lambda: spotify.api("GET", "/me")["id"])
+
+
 def liked_songs_uri():
-    user_id = cached("user_id", lambda: spotify.api("GET", "/me")["id"])
-    return f"spotify:user:{user_id}:collection"
+    return f"spotify:user:{user_id()}:collection"
 
 
 def playlist_tracks(playlist):

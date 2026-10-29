@@ -88,6 +88,10 @@ def set_liked(uri, liked):
     api("PUT" if liked else "DELETE", "/me/library", {"uris": uri})
 
 
+def add_to_playlist(playlist_id, uri):
+    api("POST", f"/playlists/{playlist_id}/items", body={"uris": [uri]})
+
+
 def album_tracks(album_id):
     return list(paginate(f"/albums/{album_id}/tracks"))
 
