@@ -26,6 +26,7 @@ PLAY_ALL = "▶ Play"
 SHUFFLE_ALL = "🔀 Shuffle all"
 SEARCH = "🔍 Search"
 LIKED = "♥ Liked songs"
+REFRESH = "🔄 Refresh library"
 
 
 def controls():
@@ -211,7 +212,7 @@ def main_menu():
         # controls only make sense while something is loaded
         current = player.now_playing()
         options = controls() if current else []
-        options += [(SEARCH, SEARCH), (LIKED, LIKED)]
+        options += [(SEARCH, SEARCH), (LIKED, LIKED), (REFRESH, REFRESH)]
         options += [(playlist["name"], playlist) for playlist in playlists]
 
         choice = pick(options, current or "Spotify")
@@ -231,6 +232,11 @@ def main_menu():
             return
         elif choice == LIKED and liked_menu():
             return
+        elif choice == REFRESH:
+            # fetch now instead of in the background, so the menu that opens next is up to date
+            notify("Refreshing your library")
+            cache.refresh()
+            playlists = cache.playlists()
 
 
 def clipboard_client_id():

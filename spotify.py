@@ -64,7 +64,13 @@ def my_playlists():
 
 
 def liked_tracks():
-    return [entry["track"] for entry in paginate("/me/tracks", limit=LIKED_SONGS_LIMIT)]
+    """Your most recently liked songs, fetching the pages side by side since there are many."""
+    first = api("GET", "/me/tracks", {"limit": 50})
+    offsets = range(50, min(first["total"], LIKED_SONGS_LIMIT), 50)
+    with ThreadPoolExecutor() as pool:
+        pages = [first] + list(pool.map(
+            lambda offset: api("GET", "/me/tracks", {"limit": 50, "offset": offset}), offsets))
+    return [entry["track"] for page in pages for entry in page["items"]][:LIKED_SONGS_LIMIT]
 
 
 def playlist_tracks(playlist_id):

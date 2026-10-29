@@ -26,7 +26,7 @@ Playlists, albums and liked songs can be played or shuffled as a whole. "▶ Pla
 
 In search, ♥ marks your own liked songs that match, then ♪ tracks (up to 30), 👤 artists, 💿 albums and 📃 playlists (up to 10 each). Spotify's ranking for apps is weak, so adding the artist helps: "baby dijon" rather than "baby".
 
-Your playlists and liked songs are cached in `~/.cache/spotify-menu/`, so the menu opens instantly. Each time it opens, the cache is refreshed in the background (at most once a minute) with `spotify-menu refresh`.
+Your playlists and liked songs are cached in `~/.cache/spotify-menu/`, so the menu opens instantly. Each time it opens, the cache is refreshed in the background (at most once a minute) with `spotify-menu refresh`. To get changes right away, for example a playlist you just made in the Spotify app, pick "🔄 Refresh library"; the menu opens again with the new data.
 
 While the hidden client runs, starting Spotify normally won't open a window, since Spotify only runs one instance. Quit the hidden one first.
 

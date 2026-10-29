@@ -6,6 +6,7 @@ The menu shows what is cached and refreshes it in the background for next time.
 import json
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import spotify
@@ -63,8 +64,12 @@ def playlist_tracks(playlist):
 
 
 def refresh():
-    save("playlists", spotify.my_playlists())
-    save("liked", spotify.liked_tracks())
+    # fetch both side by side, liked songs alone take several seconds
+    with ThreadPoolExecutor() as pool:
+        playlists = pool.submit(spotify.my_playlists)
+        liked = pool.submit(spotify.liked_tracks)
+        save("playlists", playlists.result())
+        save("liked", liked.result())
 
 
 def refresh_in_background(force=False):
