@@ -20,7 +20,7 @@ python 3.9+, dmenu, playerctl, xorg-server-xvfb, the Spotify desktop client, xcl
 The Spotify client itself must have been logged in once, which happens the first time you open it normally.
 
 ## Usage
-Run `spotify-menu`, ideally from a keybinding. Typing anything that isn't an entry searches for it, also on the search results to search again. Press Escape to go back a level. "⏹ Quit Spotify" closes the hidden client.
+Run `spotify-menu`, ideally from a keybinding. Typing anything that isn't an entry searches for it, also on the search results to search again. Press Escape to go back a level. While a song plays, "♡ Like" adds it to your liked songs and "♥ Unlike" removes it again. "⏹ Quit Spotify" closes the hidden client.
 
 Playlists, albums and liked songs can be played or shuffled as a whole. "▶ Play" continues where you left off in that playlist, which is how the Spotify client handles it. Picking a single track plays only that track, since the client can't be told to start a playlist at a given track. Spotify only lets apps list the tracks of playlists you own or collaborate on.
 

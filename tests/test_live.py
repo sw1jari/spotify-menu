@@ -41,6 +41,18 @@ class LiveTest(unittest.TestCase):
         results = spotify.search(QUERY)
         self.assertIn(TRACK_NAME, [track["name"] for track in results["tracks"]])
 
+    def test_like_and_unlike(self):
+        # flip a known track's like and put it back, so your library ends up unchanged
+        uri = next(track["uri"] for track in spotify.search(QUERY)["tracks"]
+                   if track["name"] == TRACK_NAME)
+        was_liked = spotify.is_liked(uri)
+        try:
+            spotify.set_liked(uri, not was_liked)
+            self.assertEqual(spotify.is_liked(uri), not was_liked)
+        finally:
+            spotify.set_liked(uri, was_liked)
+        self.assertEqual(spotify.is_liked(uri), was_liked)
+
     def test_library(self):
         playlists = spotify.my_playlists()
         self.assertTrue(all("uri" in playlist for playlist in playlists))

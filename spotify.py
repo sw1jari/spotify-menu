@@ -79,6 +79,15 @@ def playlist_tracks(playlist_id):
     return [track for track in tracks if track and track.get("type") == "track"]
 
 
+def is_liked(uri):
+    return api("GET", "/me/library/contains", {"uris": uri})[0]
+
+
+def set_liked(uri, liked):
+    # the older /me/tracks endpoints answer 403 for new apps, /me/library takes any uri
+    api("PUT" if liked else "DELETE", "/me/library", {"uris": uri})
+
+
 def album_tracks(album_id):
     return list(paginate(f"/albums/{album_id}/tracks"))
 

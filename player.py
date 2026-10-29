@@ -51,6 +51,14 @@ def current_track_id():
     return track_path.rsplit("/", 1)[-1]
 
 
+def current_track_uri():
+    """Uri of the current track, None for an episode, ad or nothing loaded."""
+    track_id = current_track_id()
+    if not track_id or "/track/" not in (playerctl("metadata", "mpris:trackid") or ""):
+        return None
+    return f"spotify:track:{track_id}"
+
+
 def wait_until_started(uri, previous_track_id):
     """True once the client plays the opened uri, False if it ignored the open."""
     deadline = time.time() + OPEN_WAIT_SECONDS

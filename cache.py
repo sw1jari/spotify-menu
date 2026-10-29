@@ -64,10 +64,10 @@ def refresh():
     save("liked", spotify.liked_tracks())
 
 
-def refresh_in_background():
+def refresh_in_background(force=False):
     """Start `spotify-menu refresh` detached, unless the cache was refreshed just now."""
     playlists_file = CACHE_DIR / "playlists.json"
-    if playlists_file.exists() and time.time() - playlists_file.stat().st_mtime < REFRESH_AFTER_SECONDS:
+    if not force and playlists_file.exists() and time.time() - playlists_file.stat().st_mtime < REFRESH_AFTER_SECONDS:
         return
     subprocess.Popen([str(SCRIPT), "refresh"], stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, start_new_session=True)

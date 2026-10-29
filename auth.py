@@ -26,6 +26,7 @@ SCOPES = " ".join([
     "playlist-read-private",
     "playlist-read-collaborative",
     "user-library-read",
+    "user-library-modify",
 ])
 
 
@@ -35,6 +36,15 @@ class AuthError(Exception):
 
 def is_logged_in():
     return TOKEN_FILE.exists()
+
+
+def missing_scopes():
+    """Scopes the saved login wasn't granted, e.g. ones added in a newer version."""
+    try:
+        granted = json.loads(TOKEN_FILE.read_text()).get("scope", "").split()
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+    return [scope for scope in SCOPES.split() if scope not in granted]
 
 
 def saved_client_id():

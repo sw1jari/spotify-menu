@@ -32,14 +32,28 @@ def controls():
     """(label, action) pairs for playback, with shuffle and repeat showing their current state."""
     shuffle = "on" if player.playerctl("shuffle") == "On" else "off"
     repeat = player.repeat_mode()
-    return [
-        ("⏯ Pause/resume", player.toggle_pause),
+    options = [("⏯ Pause/resume", player.toggle_pause)]
+    # episodes and ads can't be liked, so only offer it for tracks
+    uri = player.current_track_uri()
+    if uri:
+        liked = spotify.is_liked(uri)
+        options.append(("♥ Unlike" if liked else "♡ Like", lambda: set_liked(uri, not liked)))
+    return options + [
         ("⏭ Next", player.next_track),
         ("⏮ Previous", player.previous_track),
         (f"🔀 Shuffle: {shuffle}", player.toggle_shuffle),
         (f"{'🔂' if repeat == 'one' else '🔁'} Repeat: {repeat}", player.cycle_repeat),
         ("⏹ Quit Spotify", player.quit),
     ]
+
+
+def set_liked(uri, liked):
+    title = player.now_playing()
+    spotify.set_liked(uri, liked)
+    # the menu closes right after, so confirm it in a notification
+    notify(f"{'Liked' if liked else 'Unliked'} {title}")
+    # liked songs and search's ♥ marks read the cache, so bring it up to date
+    cache.refresh_in_background(force=True)
 
 
 def dmenu(labels, prompt):
@@ -240,6 +254,10 @@ def main():
     try:
         if not auth.is_logged_in() and not login_menu():
             return
+        # a login from before a new feature lacks its scope, so log in once more with the saved id
+        if auth.missing_scopes():
+            notify("spotify-menu needs one more permission, log in to Spotify in your browser")
+            auth.login(auth.load_client_id())
         main_menu()
     except (AuthError, spotify.SpotifyError, player.PlayerError) as error:
         notify(str(error))
