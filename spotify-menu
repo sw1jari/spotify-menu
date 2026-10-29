@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""dmenu frontend for Spotify: controls, playlists, liked songs and search.
+
+usage: spotify-menu              open the menu
+       spotify-menu login ID     log in with your Spotify app's client id
+       spotify-menu refresh      refresh the cached playlists and liked songs
+"""
+
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+# the modules live next to the real file, also when this is run through a symlink
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import auth
+import cache
+import player
+import spotify
+from auth import AuthError
+
+# Spotify resumes a playlist or album where you left off in it, so this isn't always the first track
+PLAY_ALL = "▶ Play"
+SHUFFLE_ALL = "🔀 Shuffle all"
+SEARCH = "🔍 Search"
+LIKED = "♥ Liked songs"
+
+
+def controls():
+    """(label, action) pairs for playback, with shuffle and repeat showing their current state."""
+    shuffle = "on" if player.playerctl("shuffle") == "On" else "off"
+    repeat = player.repeat_mode()
+    return [
+        ("⏯ Pause/resume", player.toggle_pause),
+        ("⏭ Next", player.next_track),
+        ("⏮ Previous", player.previous_track),
+        (f"🔀 Shuffle: {shuffle}", player.toggle_shuffle),
+        (f"{'🔂' if repeat == 'one' else '🔁'} Repeat: {repeat}", player.cycle_repeat),
+        ("⏹ Quit Spotify", player.quit),
+    ]
+
+
+def dmenu(labels, prompt):
+    """Show labels in dmenu and return the picked or typed text, None on escape."""
+    result = subprocess.run(["dmenu", "-i", "-l", "20", "-p", prompt],
+                            input="\n".join(labels), capture_output=True, text=True)
+    choice = result.stdout.strip()
+    return choice if result.returncode == 0 and choice else None
+
+
+class Typed(str):
+    """Text typed into dmenu that isn't one of the entries."""
+
+
+def pick(options, prompt):
+    """Pick from (label, value) pairs; repeated labels get a counter to stay unique.
+
+    Returns the picked value, Typed text when what was typed matches no entry, or None on escape.
+    """
+    by_label = {}
+    for label, value in options:
+        unique_label, count = label, 1
+        while unique_label in by_label:
+            count += 1
+            unique_label = f"{label} ({count})"
+        by_label[unique_label] = value
+    choice = dmenu(by_label, prompt)
+    if choice is None:
+        return None
+    return by_label[choice] if choice in by_label else Typed(choice)
+
+
+def artist_names(item):
+    return ", ".join(artist["name"] for artist in item.get("artists", []))
+
+
+def track_label(track):
+    return f"{track['name']} · {artist_names(track)}"
+
+
+def tracks_menu(title, context_uri, tracks):
+    """Play or shuffle a whole playlist, album or liked songs, or play one of its tracks."""
+    options = [(PLAY_ALL, PLAY_ALL), (SHUFFLE_ALL, SHUFFLE_ALL)]
+    options += [(track_label(track), track["uri"]) for track in tracks or []]
+    choice = pick(options, title)
+    # typed text that matches no track goes back, like escape
+    if not choice or isinstance(choice, Typed):
+        return False
+
+    if choice == PLAY_ALL:
+        player.play(context_uri)
+    elif choice == SHUFFLE_ALL:
+        player.play(context_uri, shuffle=True)
+    else:
+        # the desktop client can't start a playlist at a given track, so this plays just the track
+        player.play(choice)
+    return True
+
+
+def playlist_menu(playlist):
+    # Spotify only lists tracks of playlists you own, others can still be played whole
+    tracks = cache.playlist_tracks(playlist)
+    return tracks_menu(playlist["name"], playlist["uri"], tracks)
+
+
+def album_menu(album):
+    return tracks_menu(album["name"], album["uri"], spotify.album_tracks(album["id"]))
+
+
+def liked_menu():
+    return tracks_menu(LIKED, cache.liked_songs_uri(), cache.liked_tracks())
+
+
+def matching_liked_tracks(query):
+    """Liked songs whose title and artists contain every word of the query."""
+    words = query.lower().split()
+    # only use what is cached already, fetching liked songs would make search slow
+    return [track for track in cache.load("liked") or []
+            if all(word in track_label(track).lower() for word in words)]
+
+
+def search_menu(query=None):
+    query = query or dmenu([], "search:")
+    if not query:
+        return False
+
+    while True:
+        item = pick(search_options(query), query)
+        if not item:
+            return False
+        # typing something new on the results searches again
+        if isinstance(item, Typed):
+            query = item
+        elif item["type"] in ("track", "artist"):
+            player.play(item["uri"])
+            return True
+        elif item["type"] == "album" and album_menu(item):
+            return True
+        elif item["type"] == "playlist" and playlist_menu(item):
+            return True
+
+
+def search_options(query):
+    """(label, item) pairs for everything the query finds."""
+    results = spotify.search(query)
+
+    # Spotify often returns the same song several times, so skip anything already listed
+    options, listed = [], set()
+
+    def add(symbol, label, item):
+        if (item["type"], label) not in listed:
+            listed.add((item["type"], label))
+            options.append((f"{symbol} {label}", item))
+
+    # one list with a symbol per kind, your own liked songs first since Spotify's ranking is weak
+    for track in matching_liked_tracks(query):
+        add("♥", track_label(track), track)
+    for track in results.get("tracks", []):
+        add("♪", track_label(track), track)
+    for artist in results.get("artists", []):
+        add("👤", artist["name"], artist)
+    for album in results.get("albums", []):
+        add("💿", f"{album['name']} · {artist_names(album)}", album)
+    for playlist in results.get("playlists", []):
+        add("📃", f"{playlist['name']} · {playlist['owner']['display_name']}", playlist)
+    return options
+
+
+def main_menu():
+    playlists = cache.playlists()
+    cache.refresh_in_background()
+    while True:
+        # controls only make sense while something is loaded
+        current = player.now_playing()
+        options = controls() if current else []
+        options += [(SEARCH, SEARCH), (LIKED, LIKED)]
+        options += [(playlist["name"], playlist) for playlist in playlists]
+
+        choice = pick(options, current or "Spotify")
+        if not choice:
+            return
+        # anything typed that isn't an entry is a search
+        if isinstance(choice, Typed):
+            if search_menu(choice):
+                return
+        elif isinstance(choice, dict):
+            if playlist_menu(choice):
+                return
+        elif callable(choice):
+            choice()
+            return
+        elif choice == SEARCH and search_menu():
+            return
+        elif choice == LIKED and liked_menu():
+            return
+
+
+def clipboard_client_id():
+    """The clipboard contents if they look like a client id (32 hex characters)."""
+    try:
+        clipboard = subprocess.run(["xclip", "-o", "-selection", "clipboard"],
+                                   capture_output=True, text=True, timeout=2).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return clipboard if re.fullmatch(r"[0-9a-f]{32}", clipboard) else None
+
+
+def login_menu():
+    """Ask for the client id in dmenu, offering a copied or saved one, then log in."""
+    suggestions = [auth.saved_client_id(), clipboard_client_id()]
+    suggestions = list(dict.fromkeys(filter(None, suggestions)))
+    client_id = dmenu(suggestions, "Spotify client id:")
+    if not client_id:
+        return False
+    notify("Log in to Spotify in your browser")
+    auth.login(client_id)
+    return True
+
+
+def notify(message):
+    print(f"spotify-menu: {message}", file=sys.stderr)
+    notifier = shutil.which("dunstify") or shutil.which("notify-send")
+    if notifier:
+        subprocess.run([notifier, "-a", "spotify-menu", "Spotify", message],
+                       stderr=subprocess.DEVNULL)
+
+
+def main():
+    if len(sys.argv) == 3 and sys.argv[1] == "login":
+        auth.login(sys.argv[2])
+        return
+    if sys.argv[1:] == ["refresh"]:
+        cache.refresh()
+        return
+    if len(sys.argv) > 1:
+        sys.exit(__doc__.strip())
+
+    try:
+        if not auth.is_logged_in() and not login_menu():
+            return
+        main_menu()
+    except (AuthError, spotify.SpotifyError, player.PlayerError) as error:
+        notify(str(error))
+        sys.exit(1)
+    except OSError as error:
+        notify(f"Error: {error}")
+        sys.exit(1)
+    # anything else is a bug, still show it since there is no terminal to see a traceback
+    except Exception as error:
+        notify(f"Unexpected error: {error!r}")
+        raise
+
+
+if __name__ == "__main__":
+    main()
