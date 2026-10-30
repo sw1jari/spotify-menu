@@ -4,6 +4,7 @@ Spotify's Web API can't start playback on the desktop client and librespot playe
 get refused by Spotify for many accounts, so playback goes through playerctl.
 """
 
+import shutil
 import subprocess
 import time
 
@@ -13,6 +14,8 @@ READY_DELAY_SECONDS = 3
 OPEN_ATTEMPTS = 3
 OPEN_WAIT_SECONDS = 4
 SETTING_WAIT_SECONDS = 8
+# fixed id so the starting notification can be closed again
+STARTING_NOTIFICATION_ID = "48213"
 # MPRIS loop status to the names Spotify shows
 REPEAT_MODES = {"None": "off", "Playlist": "all", "Track": "one"}
 
@@ -37,12 +40,22 @@ def start():
         return
     subprocess.Popen(["xvfb-run", "-a", "spotify"], stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL, start_new_session=True)
-    for _ in range(START_WAIT_SECONDS):
-        time.sleep(1)
-        if is_running():
-            time.sleep(READY_DELAY_SECONDS)
-            return
-    raise PlayerError("The hidden Spotify client did not start")
+    dunstify("-a", "spotify-menu", "-t", "0", "-r", STARTING_NOTIFICATION_ID,
+             "Spotify", "Starting Spotify")
+    try:
+        for _ in range(START_WAIT_SECONDS):
+            time.sleep(1)
+            if is_running():
+                time.sleep(READY_DELAY_SECONDS)
+                return
+        raise PlayerError("The hidden Spotify client did not start")
+    finally:
+        dunstify("-C", STARTING_NOTIFICATION_ID)
+
+
+def dunstify(*args):
+    if shutil.which("dunstify"):
+        subprocess.run(["dunstify", *args], stderr=subprocess.DEVNULL)
 
 
 def current_track_id():
