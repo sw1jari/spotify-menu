@@ -6,6 +6,30 @@ It browses your library with the Spotify Web API. Playback goes through the offi
 
 Why not the Web API or spotifyd for playback? The Web API returns server errors when asked to start the desktop client, and Spotify currently refuses audio keys to librespot based players such as spotifyd for many accounts.
 
+## Demo
+
+The playlists and songs in these gifs are demo data.
+
+Picking a playlist and shuffling it, the bar above shows what's playing:
+
+![playing a playlist](docs/spotify-menu-playlist.gif)
+
+Typing anything that isn't a menu entry searches Spotify, with your liked songs first:
+
+![searching](docs/spotify-menu-search.gif)
+
+Pause, resume, next and repeat from the menu:
+
+![playback controls](docs/spotify-menu-controls.gif)
+
+Liking the current song and adding it to one of your playlists:
+
+![liking and adding to a playlist](docs/spotify-menu-like.gif)
+
+The play/pause, next and previous media keys on your keyboard keep working, since the hidden client still listens to `playerctl`:
+
+![keyboard media keys](docs/spotify-menu-mediakeys.gif)
+
 ## Requirements
 python 3.9+, dmenu, playerctl, xorg-server-xvfb, the Spotify desktop client, xclip (optional, to offer a copied client id). Creating a developer app needs Spotify Premium. Errors show as a notification through `dunstify`, or `notify-send` when dunst isn't installed.
 
