@@ -103,3 +103,7 @@ python3 -m unittest
 ```
 
 The tests use your real account. They start the hidden client and play a few tracks for a couple of seconds each.
+
+## License
+
+MIT
